@@ -2,7 +2,9 @@ package utils
 
 import (
 	"bytes"
+	"fmt"
 	"sync"
+	"unsafe"
 )
 
 const (
@@ -29,6 +31,19 @@ func NewSkipList(arenaSize int64) *SkipList {
 		arena:      arena,
 	}
 }
+
+// Two steps in creating a new element
+// 	  Step 1: allocate specified ( sizeof(node) ) space in arena.buf. It returns the elemOffset (related to the arena.buf)
+//  of the beginning of the new element.
+//    Step 2: Put key and value in arena.buf respectively and gets the key_offset, value_offset, and value_sz
+// 	  Step 3: Fetch the pointer of the new element (&arena.buf[elemOffset]) and use this pointer to
+//  fill these offsets in the element
+// We can see that Key and value are not store in the element but some other place in the arena.buf
+// Element only record the key offset and value offset.
+// This means we can change the value by an atomic operation:
+// Both of the val size and val off are uin32 integers. We can encode them to be an uint64 integer.
+// So, after we change the value, we can use a single integer assignment in element to make the change atomically
+//without the use of lock.
 
 func newElement(arena *Arena, key []byte, v ValueStruct, height int) *Element {
 	nodeOffset := arena.putNode(height)
@@ -67,6 +82,7 @@ type Element struct {
 
 	height uint16
 
+	// 存放的是 next节点在arena.buf中的offset
 	levels [defaultMaxLevel]uint32 //这里先按照最大高度声明，往arena中放置的时候，会计算实际高度和内存消耗
 }
 
@@ -129,6 +145,7 @@ func (list *SkipList) Add(data *Entry) error {
 	elem = newElement(list.arena, data.Key, ValueStruct{Value: data.Value}, level)
 	//to add elem to the skiplist
 	off := list.arena.getElementOffset(elem)
+	fmt.Printf("Key :%v off:%v\n", string(data.Key), off)
 	for i := 0; i < level; i++ {
 		elem.levels[i] = prevElemHeaders[i].levels[i]
 		prevElemHeaders[i].levels[i] = off
@@ -152,6 +169,7 @@ func (list *SkipList) Search(key []byte) (e *Entry) {
 	for i >= 0 {
 		for next := list.getNext(prevElem, int(i)); next != nil; next = list.getNext(prevElem, int(i)) {
 			if comp := list.compare(score, key, next); comp <= 0 {
+				fmt.Printf("prevElem:%v\n", unsafe.Pointer(prevElem))
 				if comp == 0 {
 					vo, vSize := decodeValue(next.value)
 					return &Entry{Key: key, Value: list.arena.getVal(vo, vSize).Value}

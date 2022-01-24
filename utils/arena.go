@@ -78,7 +78,7 @@ func (s *Arena) putKey(key []byte) uint32 {
 	//implement me here！！！
 	//将  Key 值存储到 arena 当中
 	// 并且将指针返回，返回的指针值应被存储在 Node 节点中
-	valSz := uint32(unsafe.Sizeof(key))
+	valSz := uint32(len(key))
 	off := s.allocate(valSz)
 	buf := s.buf[off : off+valSz]
 	AssertTrue(int(valSz) == copy(buf, key))
@@ -106,13 +106,18 @@ func (s *Arena) getVal(offset uint32, size uint32) (v ValueStruct) {
 func (s *Arena) getElementOffset(nd *Element) uint32 {
 	//implement me here！！！
 	//获取某个节点，在 arena 当中的偏移量
-	return 0
+	if nd == nil {
+		return 0
+	}
+
+	// s.buf is a slice, so its address is the same with the first element of it
+	return uint32(uintptr(unsafe.Pointer(nd)) - uintptr(unsafe.Pointer(&s.buf[0])))
 }
 
 func (e *Element) getNextOffset(h int) uint32 {
 	//implement me here！！！
 	// 这个方法用来计算节点在h 层数下的 next 节点
-	return 0
+	return atomic.LoadUint32(&e.levels[h])
 }
 
 func (s *Arena) Size() int64 {

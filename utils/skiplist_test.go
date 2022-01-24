@@ -60,10 +60,16 @@ func Benchmark_SkipListBasicCRUD(b *testing.B) {
 	for i := 0; i < maxTime; i++ {
 		//number := rand.Intn(10000)
 		key, val = fmt.Sprintf("Key%d", i), fmt.Sprintf("Val%d", i)
+		if key == "Key23" {
+			fmt.Println()
+		}
 		entry := NewEntry([]byte(key), []byte(val))
 		res := list.Add(entry)
 		assert.Equal(b, res, nil)
 		searchVal := list.Search([]byte(key))
+		if searchVal == nil {
+			fmt.Println("Here")
+		}
 		assert.Equal(b, searchVal.Value, []byte(val))
 	}
 }
